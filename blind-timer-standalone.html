@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>БЛАЙНД · Таймер турнира</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --felt-dark:#0b1f17; --felt:#123324; --felt-light:#1a4732;
+    --gold:#c9a227; --gold-bright:#e8c565;
+    --cream:#ede6d6; --cream-dim:#a9b3a8;
+    --red:#8b2e2e; --red-bright:#c1483f;
+    --green-ok:#4c9a6a;
+    --line:rgba(237,230,214,0.12);
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    background:radial-gradient(ellipse at 50% -10%, var(--felt-light) 0%, var(--felt) 45%, var(--felt-dark) 100%);
+    color:var(--cream); font-family:'Inter',sans-serif;
+    min-height:100vh; display:flex; flex-direction:column; overflow-x:hidden;
+  }
+  body::before{
+    content:""; position:fixed; inset:0;
+    background-image:repeating-linear-gradient(45deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 3px);
+    pointer-events:none; z-index:0;
+  }
+
+  /* ---------- role picker ---------- */
+  #rolePicker{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:22px; padding:30px; position:relative; z-index:2; text-align:center;
+  }
+  #rolePicker .brand{font-family:'Bebas Neue',sans-serif; font-size:44px; letter-spacing:3px; color:var(--gold-bright);}
+  #rolePicker p{color:var(--cream-dim); font-size:14px; max-width:340px; line-height:1.5;}
+  .role-cards{display:flex; gap:16px; flex-wrap:wrap; justify-content:center; margin-top:10px;}
+  .role-card{
+    width:220px; padding:28px 20px; border-radius:16px;
+    background:rgba(237,230,214,0.05); border:1px solid var(--line);
+    cursor:pointer; transition:transform .12s, border-color .15s, background .15s;
+  }
+  .role-card:hover{transform:translateY(-3px); border-color:var(--gold); background:rgba(237,230,214,0.08);}
+  .role-card .emoji{font-size:38px; margin-bottom:10px;}
+  .role-card h3{font-family:'Bebas Neue',sans-serif; letter-spacing:1px; font-size:22px; color:var(--gold-bright); font-weight:400; margin-bottom:6px;}
+  .role-card span{font-size:12px; color:var(--cream-dim);}
+
+  /* ---------- shared topbar ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 24px; border-bottom:1px solid var(--line); position:relative; z-index:2;
+  }
+  .brand{display:flex; align-items:center; gap:10px; font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:2px; color:var(--gold-bright);}
+  .brand .dot{width:8px; height:8px; border-radius:50%; background:var(--red-bright); box-shadow:0 0 8px var(--red-bright);}
+  .sync-dot{width:7px; height:7px; border-radius:50%; background:var(--green-ok); box-shadow:0 0 6px var(--green-ok); transition:background .3s, box-shadow .3s;}
+  .sync-dot.stale{background:var(--red-bright); box-shadow:0 0 6px var(--red-bright);}
+  .sync-row{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--cream-dim); letter-spacing:0.5px;}
+  .icon-btn{
+    background:rgba(237,230,214,0.06); border:1px solid var(--line); color:var(--cream);
+    padding:8px 14px; border-radius:8px; font-size:12px; font-weight:500; cursor:pointer;
+    font-family:'Inter',sans-serif;
+  }
+  .icon-btn:hover{background:rgba(237,230,214,0.12); border-color:var(--gold);}
+
+  main{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px 16px 30px; position:relative; z-index:2; gap:22px; width:100%;}
+
+  /* ---------- TV clock ---------- */
+  .ring-wrap{position:relative; width:min(66vw, 480px); aspect-ratio:1; display:flex; align-items:center; justify-content:center;}
+  .chip-ring{position:absolute; inset:0;}
+  .chip{
+    position:absolute; width:5.6%; height:5.6%; left:50%; top:50%; margin-left:-2.8%; margin-top:-2.8%;
+    border-radius:50%; background:radial-gradient(circle at 35% 30%, var(--gold-bright), var(--gold) 60%, #8a6b16 100%);
+    border:2px solid rgba(11,31,23,0.5); transition:background .3s, opacity .3s;
+  }
+  .chip.spent{background:radial-gradient(circle at 35% 30%, #3a4a41, #22302a 60%, #16211c 100%); border-color:rgba(0,0,0,0.3); opacity:0.5;}
+  .chip.warn{background:radial-gradient(circle at 35% 30%, var(--red-bright), var(--red) 60%, #4a1717 100%);}
+  .clock-core{position:relative; z-index:3; display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center;}
+  .level-eyebrow{font-family:'Bebas Neue',sans-serif; letter-spacing:4px; font-size:15px; color:var(--cream-dim);}
+  .level-eyebrow b{color:var(--gold-bright); font-size:16px;}
+  .clock{
+    font-family:'JetBrains Mono',monospace; font-weight:700; font-size:min(15vw,116px); line-height:1;
+    letter-spacing:2px; color:var(--cream); text-shadow:0 0 26px rgba(201,162,39,0.25);
+    font-variant-numeric:tabular-nums;
+  }
+  .clock.warn{color:var(--red-bright); text-shadow:0 0 26px rgba(193,72,63,0.4);}
+  .clock.paused{color:var(--cream-dim);}
+  .blinds-line{font-family:'Bebas Neue',sans-serif; font-size:min(6vw,34px); letter-spacing:1px; color:var(--gold-bright);}
+  .ante-line{font-size:13px; color:var(--cream-dim); letter-spacing:1px;}
+  .break-banner{font-family:'Bebas Neue',sans-serif; font-size:min(10vw,56px); letter-spacing:3px; color:var(--red-bright);}
+  .next-strip{
+    display:flex; align-items:center; gap:14px; background:rgba(237,230,214,0.05); border:1px solid var(--line);
+    border-radius:12px; padding:11px 20px; font-size:13px; color:var(--cream-dim);
+  }
+  .next-strip b{color:var(--cream); font-weight:600;}
+  .next-strip .arrow{color:var(--gold);}
+
+  /* ---------- remote (phone) ---------- */
+  #remoteView{max-width:420px; width:100%;}
+  .remote-status{
+    background:rgba(237,230,214,0.05); border:1px solid var(--line); border-radius:14px;
+    padding:18px 20px; text-align:center; margin-bottom:20px;
+  }
+  .remote-status .lvl{font-family:'Bebas Neue',sans-serif; letter-spacing:2px; color:var(--cream-dim); font-size:13px;}
+  .remote-status .time{font-family:'JetBrains Mono',monospace; font-size:44px; font-weight:700; margin:4px 0;}
+  .remote-status .blinds{font-family:'Bebas Neue',sans-serif; font-size:24px; color:var(--gold-bright); letter-spacing:1px;}
+  .remote-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;}
+  .btn{
+    font-family:'Inter',sans-serif; font-weight:600; font-size:15px; padding:16px 18px; border-radius:12px;
+    border:1px solid var(--line); background:rgba(237,230,214,0.05); color:var(--cream); cursor:pointer;
+    transition:transform .1s, background .15s, border-color .15s;
+  }
+  .btn:active{transform:scale(0.97);}
+  .btn.primary{background:linear-gradient(180deg, var(--gold-bright), var(--gold)); color:#241b04; border:none; grid-column:1/-1; padding:20px; font-size:17px;}
+  .btn.wide{grid-column:1/-1;}
+  .btn.ghost:hover{border-color:var(--gold);}
+  .btn.danger:hover{border-color:var(--red-bright); color:var(--red-bright);}
+
+  /* ---------- modal (shared) ---------- */
+  .overlay{position:fixed; inset:0; background:rgba(5,12,9,0.72); display:none; align-items:center; justify-content:center; z-index:50; padding:16px; backdrop-filter:blur(3px);}
+  .overlay.open{display:flex;}
+  .modal{background:var(--felt-dark); border:1px solid var(--line); border-radius:16px; width:min(680px,100%); max-height:88vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.5);}
+  .modal-head{padding:18px 22px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between;}
+  .modal-head h2{font-family:'Bebas Neue',sans-serif; letter-spacing:1px; font-size:20px; color:var(--gold-bright); font-weight:400;}
+  .modal-body{padding:16px 22px; overflow-y:auto;}
+  .presets{display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;}
+  .preset-btn{font-size:12px; padding:7px 12px; border-radius:7px; background:rgba(201,162,39,0.1); border:1px solid rgba(201,162,39,0.3); color:var(--gold-bright); cursor:pointer; font-family:'Inter',sans-serif;}
+  .preset-btn:hover{background:rgba(201,162,39,0.18);}
+  table.levels{width:100%; border-collapse:collapse; font-size:13px;}
+  table.levels th{text-align:left; color:var(--cream-dim); font-weight:500; padding:6px 6px; border-bottom:1px solid var(--line); font-size:10px; letter-spacing:0.5px; text-transform:uppercase;}
+  table.levels td{padding:5px 6px; border-bottom:1px solid rgba(237,230,214,0.06);}
+  table.levels input{width:100%; background:rgba(237,230,214,0.06); border:1px solid var(--line); color:var(--cream); border-radius:6px; padding:6px 6px; font-size:13px; font-family:'JetBrains Mono',monospace;}
+  table.levels input:focus{outline:none; border-color:var(--gold);}
+  .mini-btn{background:none; border:1px solid var(--line); color:var(--cream-dim); border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:14px;}
+  .mini-btn:hover{border-color:var(--red-bright); color:var(--red-bright);}
+  .break-tag{background:rgba(193,72,63,0.15); color:var(--red-bright); font-size:10px; padding:2px 6px; border-radius:5px; letter-spacing:0.5px;}
+  .add-row-btn{margin-top:10px; width:100%; padding:10px; border-radius:8px; border:1px dashed var(--line); background:none; color:var(--cream-dim); cursor:pointer; font-size:13px; font-family:'Inter',sans-serif;}
+  .add-row-btn:hover{border-color:var(--gold); color:var(--gold-bright);}
+  .modal-foot{padding:14px 22px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:10px;}
+  .hidden{display:none !important;}
+
+  @media (max-width:520px){
+    .topbar{padding:12px 16px;} .brand{font-size:20px;} .icon-btn{padding:7px 11px; font-size:11px;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= ROLE PICKER ================= -->
+<div id="rolePicker">
+  <div class="brand">БЛАЙНД</div>
+  <p>Открой этот же файл (с одного и того же хостинга) на обоих телевизорах и на телефоне. Выбери роль устройства — синхронизация через ваш Supabase, без VPN.</p>
+  <p id="configWarning" class="hidden" style="color:var(--red-bright); font-size:12px; max-width:340px;">⚠ Не заполнены SUPABASE_URL / SUPABASE_ANON_KEY в начале файла — синхронизация между устройствами работать не будет.</p>
+  <div class="role-cards">
+    <div class="role-card" data-role="tv">
+      <div class="emoji">📺</div>
+      <h3>Экран (TV)</h3>
+      <span>Показывает таймер турнира</span>
+    </div>
+    <div class="role-card" data-role="remote">
+      <div class="emoji">📱</div>
+      <h3>Пульт</h3>
+      <span>Управление с телефона</span>
+    </div>
+  </div>
+</div>
+
+<!-- ================= TV VIEW ================= -->
+<div id="tvView" class="hidden" style="display:flex; flex-direction:column; flex:1;">
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span>БЛАЙНД</div>
+    <div class="sync-row"><span class="sync-dot" id="syncDotTv"></span><span id="syncTextTv">синхронизация</span></div>
+  </div>
+  <main>
+    <div class="ring-wrap">
+      <div class="chip-ring" id="chipRing"></div>
+      <div class="clock-core">
+        <div class="level-eyebrow" id="levelEyebrow">УРОВЕНЬ <b id="levelNum">1</b> ИЗ <span id="levelTotal">1</span></div>
+        <div class="clock" id="clockDisplay">20:00</div>
+        <div class="blinds-line" id="blindsLine">25 / 50</div>
+        <div class="ante-line" id="anteLine"></div>
+      </div>
+    </div>
+    <div class="next-strip" id="nextStrip"><span>Далее</span><span class="arrow">→</span><b id="nextInfo">50 / 100</b></div>
+  </main>
+</div>
+
+<!-- ================= REMOTE VIEW ================= -->
+<div id="remoteView" class="hidden" style="display:flex; flex-direction:column; flex:1; align-items:center;">
+  <div class="topbar" style="width:100%;">
+    <div class="brand"><span class="dot"></span>Пульт</div>
+    <div class="sync-row"><span class="sync-dot" id="syncDotRemote"></span><span id="syncTextRemote">синхронизация</span></div>
+  </div>
+  <main style="width:100%;">
+    <div id="remoteInner" style="max-width:420px; width:100%;">
+      <div class="remote-status">
+        <div class="lvl">УРОВЕНЬ <span id="rLevelNum">1</span> ИЗ <span id="rLevelTotal">1</span></div>
+        <div class="time" id="rTime">20:00</div>
+        <div class="blinds" id="rBlinds">25 / 50</div>
+      </div>
+      <div class="remote-grid">
+        <button class="btn primary" id="rPlayPause">Старт</button>
+        <button class="btn ghost" id="rPrev">‹ Пред. уровень</button>
+        <button class="btn ghost" id="rNext">След. уровень ›</button>
+        <button class="btn ghost wide" id="rSettings">Структура блайндов</button>
+        <button class="btn danger wide" id="rReset">Сбросить турнир</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ================= SETTINGS MODAL (shared) ================= -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head"><h2>Структура блайндов</h2><button class="mini-btn" id="closeModal">✕</button></div>
+    <div class="modal-body">
+      <div class="presets">
+        <button class="preset-btn" data-preset="standard">Стандарт (20 мин)</button>
+        <button class="preset-btn" data-preset="turbo">Турбо (10 мин)</button>
+        <button class="preset-btn" data-preset="deep">Deep stack (30 мин)</button>
+      </div>
+      <table class="levels">
+        <thead><tr><th>#</th><th>SB</th><th>BB</th><th>Анте</th><th>Мин.</th><th></th></tr></thead>
+        <tbody id="levelsBody"></tbody>
+      </table>
+      <button class="add-row-btn" id="addLevelBtn">+ Добавить уровень</button>
+      <button class="add-row-btn" id="addBreakBtn">+ Добавить перерыв</button>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" id="cancelModal">Отмена</button>
+      <button class="btn primary" id="applyModal" style="grid-column:auto;">Применить</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ====== НАСТРОЙКА: вставь свои данные из Supabase (Project Settings → API) ======
+  const SUPABASE_URL = 'ВСТАВЬ_SUPABASE_URL';
+  const SUPABASE_ANON_KEY = 'ВСТАВЬ_ANON_KEY';
+  const ROW_ID = 'blind-timer';
+  // ================================================================================
+
+  const STORAGE_KEY = 'blind-timer-state';
+  const configured = SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY.length > 20;
+  const supabase = configured && window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+  function standardLevels(){
+    return [
+      {sb:25,bb:50,ante:0,min:20,brk:false},{sb:50,bb:100,ante:0,min:20,brk:false},
+      {sb:75,bb:150,ante:0,min:20,brk:false},{sb:100,bb:200,ante:25,min:20,brk:false},
+      {sb:0,bb:0,ante:0,min:10,brk:true},
+      {sb:150,bb:300,ante:25,min:20,brk:false},{sb:200,bb:400,ante:50,min:20,brk:false},
+      {sb:300,bb:600,ante:75,min:20,brk:false},{sb:400,bb:800,ante:100,min:20,brk:false},
+      {sb:0,bb:0,ante:0,min:10,brk:true},
+      {sb:500,bb:1000,ante:100,min:20,brk:false},{sb:700,bb:1400,ante:200,min:20,brk:false},
+      {sb:1000,bb:2000,ante:300,min:20,brk:false},
+    ];
+  }
+  function turboLevels(){ return standardLevels().map(l=>({...l, min:l.brk?5:10})); }
+  function deepLevels(){ return standardLevels().map(l=>({...l, min:l.brk?15:30})); }
+
+  function defaultState(){
+    const levels = standardLevels();
+    return { levels, curIdx:0, running:false, endsAt:null, pausedRemaining:levels[0].min*60, updatedAt:Date.now() };
+  }
+
+  const hasStorage = !!supabase;
+
+  async function loadState(){
+    if(!hasStorage) return null;
+    try{
+      const { data, error } = await supabase.from('timer_state').select('data').eq('id', ROW_ID).single();
+      if(error || !data) return null;
+      return data.data;
+    }catch(e){ console.error('load failed', e); return null; }
+  }
+  async function saveState(state){
+    state.updatedAt = Date.now();
+    if(!hasStorage) return false;
+    try{
+      const { error } = await supabase.from('timer_state').upsert({ id: ROW_ID, data: state, updated_at: new Date().toISOString() });
+      if(error) throw error;
+      return true;
+    }catch(e){ console.error('save failed', e); return false; }
+  }
+
+  // pure function: derive {idx, secsLeft, running, isBreak} from stored state + wall clock
+  function computeEffective(state, now){
+    const levels = state.levels;
+    let idx = state.curIdx;
+    if(state.running && state.endsAt != null){
+      let endsAt = state.endsAt;
+      while(idx < levels.length-1 && now >= endsAt){
+        idx++;
+        endsAt += levels[idx].min*60000;
+      }
+      const secsLeft = Math.max(0, Math.round((endsAt-now)/1000));
+      const finished = (idx===levels.length-1 && now>=endsAt);
+      return { idx, secsLeft, running: !finished, isBreak: !!levels[idx].brk, effectiveEndsAt: endsAt };
+    } else {
+      const secsLeft = state.pausedRemaining != null ? state.pausedRemaining : levels[idx].min*60;
+      return { idx, secsLeft, running:false, isBreak: !!levels[idx].brk, effectiveEndsAt:null };
+    }
+  }
+
+  function fmtMoney(n){ return n.toLocaleString('ru-RU'); }
+  function fmtClock(secs){
+    const m = Math.floor(secs/60), s = secs%60;
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+
+  let localState = null;
+  let lastSyncOk = 0;
+
+  // ---------------- ROLE SETUP ----------------
+  const rolePicker = document.getElementById('rolePicker');
+  const tvView = document.getElementById('tvView');
+  const remoteView = document.getElementById('remoteView');
+  let role = null;
+
+  if(!configured){ document.getElementById('configWarning').classList.remove('hidden'); }
+
+  document.querySelectorAll('.role-card').forEach(card=>{
+    card.addEventListener('click', ()=>{
+      role = card.dataset.role;
+      rolePicker.classList.add('hidden');
+      if(role==='tv'){ tvView.classList.remove('hidden'); startTvLoop(); }
+      else { remoteView.classList.remove('hidden'); startRemoteLoop(); }
+    });
+  });
+
+  // ---------------- TV RENDER ----------------
+  const chipRing = document.getElementById('chipRing');
+  const CHIP_COUNT = 24;
+  function buildChipRing(){
+    chipRing.innerHTML = '';
+    for(let i=0;i<CHIP_COUNT;i++){
+      const chip = document.createElement('div');
+      chip.className='chip';
+      const angle = (i/CHIP_COUNT)*2*Math.PI - Math.PI/2;
+      const r=47;
+      chip.style.left = (50+r*Math.cos(angle))+'%';
+      chip.style.top = (50+r*Math.sin(angle))+'%';
+      chipRing.appendChild(chip);
+    }
+  }
+  buildChipRing();
+
+  function renderTv(state, eff){
+    const levels = state.levels;
+    const lvl = levels[eff.idx];
+    document.getElementById('levelTotal').textContent = levels.length;
+    document.getElementById('levelNum').textContent = eff.idx+1;
+    const clockEl = document.getElementById('clockDisplay');
+    const blindsLine = document.getElementById('blindsLine');
+    const anteLine = document.getElementById('anteLine');
+    const levelEyebrow = document.getElementById('levelEyebrow');
+
+    if(lvl.brk){
+      levelEyebrow.textContent = 'ПЕРЕРЫВ';
+      blindsLine.className='break-banner'; blindsLine.textContent='ПЕРЕРЫВ';
+      anteLine.textContent='';
+    } else {
+      levelEyebrow.innerHTML = `УРОВЕНЬ <b>${eff.idx+1}</b> ИЗ <span>${levels.length}</span>`;
+      blindsLine.className='blinds-line';
+      blindsLine.textContent = `${fmtMoney(lvl.sb)} / ${fmtMoney(lvl.bb)}`;
+      anteLine.textContent = lvl.ante>0 ? `АНТЕ ${fmtMoney(lvl.ante)}` : '';
+    }
+    clockEl.textContent = fmtClock(eff.secsLeft);
+    clockEl.classList.toggle('warn', eff.secsLeft<=60 && eff.running);
+    clockEl.classList.toggle('paused', !eff.running);
+
+    const next = levels[eff.idx+1];
+    const nextStrip = document.getElementById('nextStrip');
+    if(next){
+      nextStrip.style.visibility='visible';
+      document.getElementById('nextInfo').textContent = next.brk ? 'Перерыв' : `${fmtMoney(next.sb)} / ${fmtMoney(next.bb)}${next.ante>0?' · анте '+fmtMoney(next.ante):''}`;
+    } else nextStrip.style.visibility='hidden';
+
+    const total = lvl.min*60;
+    const spentChips = Math.floor(((total-eff.secsLeft)/total)*CHIP_COUNT);
+    const chips = chipRing.children;
+    for(let i=0;i<CHIP_COUNT;i++){
+      chips[i].classList.toggle('spent', i<spentChips);
+      chips[i].classList.toggle('warn', eff.secsLeft<=60 && i>=spentChips-1 && i<spentChips+1);
+    }
+  }
+
+  function setSyncIndicator(dotId, textId, ok){
+    document.getElementById(dotId).classList.toggle('stale', !ok);
+    document.getElementById(textId).textContent = ok ? 'синхронизировано' : 'нет связи';
+  }
+
+  let tvTicker = null;
+  async function startTvLoop(){
+    if(!hasStorage){
+      setSyncIndicator('syncDotTv','syncTextTv', false);
+      document.getElementById('syncTextTv').textContent = 'нет связи с Supabase — проверь ключи';
+    }
+    async function pull(){
+      let s = await loadState();
+      if(!s){ s = defaultState(); await saveState(s); }
+      localState = s;
+      setSyncIndicator('syncDotTv','syncTextTv', hasStorage);
+    }
+    await pull();
+    setInterval(pull, 1500);
+    function frame(){
+      if(localState){
+        const eff = computeEffective(localState, Date.now());
+        renderTv(localState, eff);
+      }
+      requestAnimationFrame(()=>setTimeout(frame, 250));
+    }
+    frame();
+  }
+
+  // ---------------- REMOTE RENDER ----------------
+  function renderRemote(state, eff){
+    const levels = state.levels;
+    const lvl = levels[eff.idx];
+    document.getElementById('rLevelTotal').textContent = levels.length;
+    document.getElementById('rLevelNum').textContent = eff.idx+1;
+    document.getElementById('rTime').textContent = fmtClock(eff.secsLeft);
+    document.getElementById('rBlinds').textContent = lvl.brk ? 'ПЕРЕРЫВ' : `${fmtMoney(lvl.sb)} / ${fmtMoney(lvl.bb)}${lvl.ante>0?' · '+fmtMoney(lvl.ante):''}`;
+    document.getElementById('rPlayPause').textContent = eff.running ? 'Пауза' : 'Старт';
+  }
+
+  let remoteTicker = null;
+  async function startRemoteLoop(){
+    if(!hasStorage){
+      setSyncIndicator('syncDotRemote','syncTextRemote', false);
+    }
+    async function pull(){
+      let s = await loadState();
+      if(!s){ s = defaultState(); await saveState(s); }
+      localState = s;
+      setSyncIndicator('syncDotRemote','syncTextRemote', hasStorage);
+      const eff = computeEffective(localState, Date.now());
+      renderRemote(localState, eff);
+    }
+    await pull();
+    setInterval(pull, 1500);
+  }
+
+  // ---------------- REMOTE CONTROLS ----------------
+  document.getElementById('rPlayPause').addEventListener('click', async ()=>{
+    if(!localState) return;
+    const now = Date.now();
+    const eff = computeEffective(localState, now);
+    if(eff.running){
+      localState.running=false; localState.curIdx=eff.idx;
+      localState.pausedRemaining=eff.secsLeft; localState.endsAt=null;
+    } else {
+      localState.running=true; localState.curIdx=eff.idx;
+      localState.endsAt = now + eff.secsLeft*1000; localState.pausedRemaining=null;
+    }
+    await saveState(localState);
+    renderRemote(localState, computeEffective(localState, Date.now()));
+  });
+
+  document.getElementById('rNext').addEventListener('click', async ()=>{
+    if(!localState) return;
+    const now = Date.now();
+    const eff = computeEffective(localState, now);
+    const newIdx = Math.min(localState.levels.length-1, eff.idx+1);
+    localState.curIdx = newIdx;
+    if(eff.running){ localState.endsAt = now + localState.levels[newIdx].min*60000; }
+    else { localState.pausedRemaining = localState.levels[newIdx].min*60; localState.endsAt=null; }
+    await saveState(localState);
+    renderRemote(localState, computeEffective(localState, Date.now()));
+  });
+
+  document.getElementById('rPrev').addEventListener('click', async ()=>{
+    if(!localState) return;
+    const now = Date.now();
+    const eff = computeEffective(localState, now);
+    const newIdx = Math.max(0, eff.idx-1);
+    localState.curIdx = newIdx;
+    if(eff.running){ localState.endsAt = now + localState.levels[newIdx].min*60000; }
+    else { localState.pausedRemaining = localState.levels[newIdx].min*60; localState.endsAt=null; }
+    await saveState(localState);
+    renderRemote(localState, computeEffective(localState, Date.now()));
+  });
+
+  document.getElementById('rReset').addEventListener('click', async ()=>{
+    if(!localState) return;
+    if(!confirm('Сбросить турнир и начать с 1-го уровня?')) return;
+    localState.curIdx=0; localState.running=false;
+    localState.pausedRemaining = localState.levels[0].min*60; localState.endsAt=null;
+    await saveState(localState);
+    renderRemote(localState, computeEffective(localState, Date.now()));
+  });
+
+  // ---------------- SETTINGS MODAL ----------------
+  const overlay = document.getElementById('overlay');
+  const levelsBody = document.getElementById('levelsBody');
+  let draftLevels = [];
+
+  function openModal(){
+    draftLevels = JSON.parse(JSON.stringify((localState||defaultState()).levels));
+    renderDraftTable();
+    overlay.classList.add('open');
+  }
+  function closeModal(){ overlay.classList.remove('open'); }
+
+  function renderDraftTable(){
+    levelsBody.innerHTML = '';
+    draftLevels.forEach((lvl,i)=>{
+      const tr = document.createElement('tr');
+      if(lvl.brk){
+        tr.innerHTML = `<td>${i+1}</td><td colspan="3"><span class="break-tag">ПЕРЕРЫВ</span></td>
+          <td><input type="number" data-i="${i}" data-f="min" value="${lvl.min}"></td>
+          <td class="mini-btn" data-del="${i}" style="text-align:center;">✕</td>`;
+      } else {
+        tr.innerHTML = `<td>${i+1}</td>
+          <td><input type="number" data-i="${i}" data-f="sb" value="${lvl.sb}"></td>
+          <td><input type="number" data-i="${i}" data-f="bb" value="${lvl.bb}"></td>
+          <td><input type="number" data-i="${i}" data-f="ante" value="${lvl.ante}"></td>
+          <td><input type="number" data-i="${i}" data-f="min" value="${lvl.min}"></td>
+          <td class="mini-btn" data-del="${i}" style="text-align:center;">✕</td>`;
+      }
+      levelsBody.appendChild(tr);
+    });
+    levelsBody.querySelectorAll('input').forEach(inp=>{
+      inp.addEventListener('input', e=>{
+        draftLevels[+e.target.dataset.i][e.target.dataset.f] = +e.target.value || 0;
+      });
+    });
+    levelsBody.querySelectorAll('[data-del]').forEach(btn=>{
+      btn.addEventListener('click', e=>{ draftLevels.splice(+e.target.dataset.del,1); renderDraftTable(); });
+    });
+  }
+
+  document.getElementById('rSettings').addEventListener('click', openModal);
+  document.getElementById('closeModal').addEventListener('click', closeModal);
+  document.getElementById('cancelModal').addEventListener('click', closeModal);
+  overlay.addEventListener('click', e=>{ if(e.target===overlay) closeModal(); });
+
+  document.getElementById('addLevelBtn').addEventListener('click', ()=>{
+    const last = draftLevels.filter(l=>!l.brk).slice(-1)[0] || {sb:25,bb:50,ante:0,min:20};
+    draftLevels.push({sb:last.sb*2||25, bb:last.bb*2||50, ante:last.ante, min:last.min, brk:false});
+    renderDraftTable();
+  });
+  document.getElementById('addBreakBtn').addEventListener('click', ()=>{
+    draftLevels.push({sb:0,bb:0,ante:0,min:10,brk:true}); renderDraftTable();
+  });
+  document.querySelectorAll('.preset-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const p = btn.dataset.preset;
+      draftLevels = p==='turbo'?turboLevels():p==='deep'?deepLevels():standardLevels();
+      renderDraftTable();
+    });
+  });
+  document.getElementById('applyModal').addEventListener('click', async ()=>{
+    if(draftLevels.length===0) return;
+    const newState = {
+      levels: draftLevels, curIdx:0, running:false, endsAt:null,
+      pausedRemaining: draftLevels[0].min*60
+    };
+    localState = newState;
+    await saveState(localState);
+    renderRemote(localState, computeEffective(localState, Date.now()));
+    closeModal();
+  });
+
+})();
+</script>
+</body>
+</html>
