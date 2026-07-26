@@ -363,7 +363,7 @@
       blindsLine.className='break-banner'; blindsLine.textContent='ПЕРЕРЫВ';
       anteLine.textContent='';
     } else {
-      levelEyebrow.innerHTML = `УРОВЕНЬ <b>${eff.idx+1}</b> ИЗ <span>${levels.length}</span>`;
+      levelEyebrow.innerHTML = `УРОВЕНЬ <b id="levelNum">${eff.idx+1}</b> ИЗ <span id="levelTotal">${levels.length}</span>`;
       blindsLine.className='blinds-line';
       blindsLine.textContent = `${fmtMoney(lvl.sb)} / ${fmtMoney(lvl.bb)}`;
       anteLine.textContent = lvl.ante>0 ? `АНТЕ ${fmtMoney(lvl.ante)}` : '';
