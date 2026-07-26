@@ -238,7 +238,7 @@
 (function(){
   // ====== НАСТРОЙКА: вставь свои данные из Supabase (Project Settings → API) ======
   const SUPABASE_URL = 'https://xrxlyiyffycelnqliivd.supabase.co';
-   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhyeGx5aXlmZnljZWxucWxpaXZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwMzA5NDgsImV4cCI6MjEwMDYwNjk0OH0.3rS4i8RI2GwgSH-QquE75lsOl6ZvjylQ5hgs4d-2BJ8';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhyeGx5aXlmZnljZWxucWxpaXZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwMzA5NDgsImV4cCI6MjEwMDYwNjk0OH0.3rS4i8RI2GwgSH-QquE75lsOl6ZvjylQ5hgs4d-2BJ8';
   const ROW_ID = 'blind-timer';
   // ================================================================================
 
@@ -412,9 +412,8 @@
         const eff = computeEffective(localState, Date.now());
         renderTv(localState, eff);
       }
-      requestAnimationFrame(()=>setTimeout(frame, 250));
     }
-    frame();
+    setInterval(frame, 500);
   }
 
   // ---------------- REMOTE RENDER ----------------
