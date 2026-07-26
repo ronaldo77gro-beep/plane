@@ -401,7 +401,7 @@
     }
     async function pull(){
       let s = await loadState();
-      if(!s){ s = defaultState(); await saveState(s); }
+      if(!s || !s.levels || !s.levels.length){ s = defaultState(); await saveState(s); }
       localState = s;
       setSyncIndicator('syncDotTv','syncTextTv', hasStorage);
     }
