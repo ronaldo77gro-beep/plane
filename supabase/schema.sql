@@ -2,9 +2,54 @@
 --  БЛАЙНД · спортивный покер — схема базы данных для Supabase
 --  Как применить: Supabase → SQL Editor → New query → вставить ВЕСЬ файл → Run.
 --  Скрипт можно запускать повторно: он ничего не удаляет из данных.
+--  Старые таблицы с такими же именами, но другого формата, переносятся в схему legacy_<дата>.
 -- =====================================================================
 
 create extension if not exists pgcrypto;
+
+-- ---------------------------------------------------------------------
+--  СОВМЕСТИМОСТЬ СО СТАРЫМИ ТАБЛИЦАМИ
+--  Если в проекте уже есть таблицы с такими же именами, но другого формата
+--  (например, от прошлой версии сайта), они НЕ удаляются, а переносятся
+--  вместе с данными в отдельную схему legacy_<дата_время>.
+-- ---------------------------------------------------------------------
+drop view if exists public.tournaments_view;
+
+do $$
+declare
+  spec    record;
+  missing int;
+  notab   boolean;
+  bk      text := 'legacy_' || to_char(clock_timestamp(), 'YYYYMMDD_HH24MISS');
+begin
+  for spec in
+    select * from (values
+      ('registrations',    array['id','tournament_id','user_id','status'],         array['uuid','uuid','uuid','text']),
+      ('profile_contacts', array['user_id'],                                       array['uuid']),
+      ('tournaments',      array['id','title','starts_at','max_players','status'], array['uuid','text','timestamp with time zone','integer','text']),
+      ('profiles',         array['id','nickname','role'],                          array['uuid','text','text']),
+      ('timer_state',      array['id','data'],                                     array['text','jsonb'])
+    ) v(tbl, cols, types)
+  loop
+    if to_regclass('public.' || spec.tbl) is null then continue; end if;
+    select exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                    where n.nspname = 'public' and c.relname = spec.tbl and c.relkind not in ('r','p'))
+      into notab;
+    select count(*) into missing
+      from generate_subscripts(spec.cols, 1) i
+     where not exists (select 1 from information_schema.columns ic
+                        where ic.table_schema = 'public' and ic.table_name = spec.tbl
+                          and ic.column_name = spec.cols[i] and ic.data_type = spec.types[i]);
+    if notab then
+      execute format('drop view if exists public.%I cascade', spec.tbl);
+      raise notice 'Удалено старое представление public.%', spec.tbl;
+    elsif missing > 0 then
+      execute format('create schema if not exists %I', bk);
+      execute format('alter table public.%I set schema %I', spec.tbl, bk);
+      raise notice 'Старая таблица public.% другого формата перенесена в %.%', spec.tbl, bk, spec.tbl;
+    end if;
+  end loop;
+end $$;
 
 -- ---------------------------------------------------------------------
 --  ТАБЛИЦЫ
@@ -22,6 +67,12 @@ create table if not exists public.profiles (
   created_at  timestamptz not null default now()
 );
 create unique index if not exists profiles_nickname_uq on public.profiles (lower(nickname));
+alter table public.profiles
+  add column if not exists full_name  text,
+  add column if not exists city       text,
+  add column if not exists about      text,
+  add column if not exists is_banned  boolean not null default false,
+  add column if not exists created_at timestamptz not null default now();
 
 -- Контакты (видят только сам игрок, крупье и администраторы)
 create table if not exists public.profile_contacts (
@@ -30,6 +81,10 @@ create table if not exists public.profile_contacts (
   phone     text,
   telegram  text
 );
+alter table public.profile_contacts
+  add column if not exists email    text,
+  add column if not exists phone    text,
+  add column if not exists telegram text;
 
 -- Турниры
 create table if not exists public.tournaments (
@@ -52,6 +107,19 @@ create table if not exists public.tournaments (
   created_by         uuid references public.profiles(id) on delete set null,
   created_at         timestamptz not null default now()
 );
+alter table public.tournaments
+  add column if not exists description       text,
+  add column if not exists location          text,
+  add column if not exists buy_in            integer not null default 0,
+  add column if not exists rebuy_price       integer not null default 0,
+  add column if not exists addon_price       integer not null default 0,
+  add column if not exists starting_stack    integer not null default 10000,
+  add column if not exists seats_per_table   integer not null default 9,
+  add column if not exists registration_open boolean not null default true,
+  add column if not exists is_rating         boolean not null default true,
+  add column if not exists points_multiplier numeric(4,2) not null default 1,
+  add column if not exists created_by        uuid references public.profiles(id) on delete set null,
+  add column if not exists created_at        timestamptz not null default now();
 create index if not exists tournaments_starts_idx on public.tournaments (starts_at);
 
 -- Записи игроков на турнир (бронь места, рассадка, результаты)
@@ -73,6 +141,17 @@ create table if not exists public.registrations (
   created_at     timestamptz not null default now(),
   check (user_id is not null or nullif(trim(guest_name),'') is not null)
 );
+alter table public.registrations
+  add column if not exists guest_name text,
+  add column if not exists table_no   integer,
+  add column if not exists seat_no    integer,
+  add column if not exists rebuys     integer not null default 0,
+  add column if not exists addons     integer not null default 0,
+  add column if not exists knockouts  integer not null default 0,
+  add column if not exists place      integer,
+  add column if not exists points     numeric(8,1) not null default 0,
+  add column if not exists prize      integer not null default 0,
+  add column if not exists created_at timestamptz not null default now();
 create unique index if not exists registrations_user_uq
   on public.registrations (tournament_id, user_id) where user_id is not null;
 create index if not exists registrations_tournament_idx on public.registrations (tournament_id);
@@ -84,6 +163,7 @@ create table if not exists public.timer_state (
   data        jsonb,
   updated_at  timestamptz default now()
 );
+alter table public.timer_state add column if not exists updated_at timestamptz default now();
 
 -- ---------------------------------------------------------------------
 --  ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ РОЛЕЙ
