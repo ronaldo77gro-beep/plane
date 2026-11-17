@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0c2a20">
+<title>Политика обработки персональных данных · БЛАИНД</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'">
+<style>
+:root{color-scheme:dark;--felt:#0c2a20;--lift:#123828;--gold:#c9a45c;--gold2:#e6cf9a;--ivory:#efe9da;--muted:#9fb0a3;--bad:#ef6b5e;--display:"Cormorant Garamond","Times New Roman",Georgia,serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--felt);color:var(--ivory);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:16px 16px 60px}
+.brand{font-family:var(--display);font-size:26px;font-weight:600;letter-spacing:.12em;color:var(--gold2);text-decoration:none}
+.brand i{font-style:normal;color:var(--gold);margin-right:6px}
+h1{font-family:var(--display);color:var(--gold2);font-weight:600;font-size:clamp(28px,6vw,40px);line-height:1.15;margin:22px 0 6px}
+h2{font-size:15px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);margin:28px 0 8px}
+a{color:var(--gold2)}
+.muted{color:var(--muted)}
+.card{background:var(--lift);border:1px solid rgba(201,164,92,.25);border-radius:14px;padding:14px 16px;margin:14px 0}
+.miss{color:var(--bad);font-weight:600}
+ul{padding-left:22px}li{margin:4px 0}
+table{border-collapse:collapse;width:100%;font-size:15px}td,th{border-bottom:1px solid rgba(201,164,92,.18);padding:7px 6px;text-align:left;vertical-align:top}th{color:var(--muted);font-weight:500;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<a class="brand" href="./"><i>♠</i>БЛАИНД</a>
+<h1>Политика обработки персональных данных</h1>
+<p class="muted">Редакция от <span data-op="policyDate"></span>. Документ опубликован по адресу <span data-site></span>privacy.html.</p>
+
+<h2>1. Кто обрабатывает данные</h2>
+<div class="card">
+  Оператор: <span data-op="name"></span><br>
+  ИНН <span data-op="inn"></span>, ОГРНИП <span data-op="ogrnip"></span><br>
+  Адрес: <span data-op="address"></span><br>
+  Обращения по персональным данным: <span data-op="email"></span>, Telegram <span data-op="telegram"></span>
+</div>
+<p>Политика действует для сайта клуба спортивного покера «БЛАИНД» (<span data-site></span>, далее — Сайт) и составлена по Федеральному закону от 27.07.2006 № 152-ФЗ «О персональных данных».</p>
+
+<h2>2. Какие данные мы обрабатываем</h2>
+<table>
+<tr><th>Данные</th><th>Зачем</th><th>Сколько храним</th></tr>
+<tr><td>Ник</td><td>вход на Сайт, запись на турниры, рейтинг сезона</td><td>пока существует аккаунт</td></tr>
+<tr><td>Пароль — только в виде хеша, сам пароль мы не знаем</td><td>вход на Сайт</td><td>пока существует аккаунт</td></tr>
+<tr><td>Подтверждение, что вам есть 18 лет; дата и время согласия</td><td>соблюдение возрастного ограничения, подтверждение согласия</td><td>пока существует аккаунт</td></tr>
+<tr><td>Записи на турниры</td><td>учёт мест на турнире</td><td>пока существует турнир в расписании или аккаунт</td></tr>
+<tr><td>Результаты турниров: ник, место, очки, нокауты</td><td>рейтинг сезона и история турниров клуба</td><td>до удаления аккаунта или отзыва согласия; после этого ник в результатах заменяется на «Игрок удалён»</td></tr>
+<tr><td>IP-адрес</td><td>защита от подбора паролей и массовых регистраций</td><td>не дольше 2 часов</td></tr>
+<tr><td>Ключ сессии (хранится в браузере, в базе — только его хеш)</td><td>чтобы не вводить пароль каждый раз</td><td>до выхода из аккаунта, не дольше 90 дней</td></tr>
+</table>
+<p>Мы <b>не запрашиваем</b> фамилию, имя, телефон, почту, паспортные и платёжные данные. Ник выбираете вы сами — можно использовать псевдоним, а не настоящее имя.</p>
+<p>Сайт не использует cookie и сторонние счётчики посещаемости. В памяти браузера (localStorage) хранятся только ключ сессии и рабочие данные турнира на устройствах персонала клуба.</p>
+
+<h2>3. Основания и способ обработки</h2>
+<p>Данные обрабатываются на основании вашего согласия (п. 1 ч. 1 ст. 6 152-ФЗ), которое вы даёте при регистрации: <a href="consent.html">согласие на обработку персональных данных</a>. Ник и результаты турниров публикуются в рейтинге сезона на основании отдельного согласия на распространение (ст. 10.1 152-ФЗ), которое находится на той же странице.</p>
+<p>Обработка автоматизированная: сбор, запись, систематизация, накопление, хранение, уточнение, извлечение, использование, распространение (только ник и результаты в рейтинге), обезличивание, блокирование, удаление и уничтожение.</p>
+
+<h2>4. Кому передаются данные</h2>
+<p>Мы не продаём и не передаём данные третьим лицам для рекламы. Для работы Сайта используются сервисы, на серверах которых данные хранятся:</p>
+<ul>
+<li><b>Supabase</b> (Supabase Inc.) — база данных Сайта;</li>
+<li><b>GitHub Pages</b> (GitHub Inc.) — размещение страниц Сайта; при открытии страниц сервис получает IP-адрес посетителя.</li>
+</ul>
+<p>Серверы этих сервисов находятся за пределами Российской Федерации, поэтому обработка включает трансграничную передачу персональных данных.</p>
+
+<h2>5. Ваши права</h2>
+<ul>
+<li>узнать, какие ваши данные обрабатываются, и получить их копию;</li>
+<li>потребовать исправить или удалить данные;</li>
+<li>отозвать согласие на обработку и на распространение;</li>
+<li>обжаловать действия оператора в Роскомнадзоре или в суде.</li>
+</ul>
+<p><b>Как удалить данные самому:</b> «Профиль» → «Удалить аккаунт». Аккаунт и записи на турниры удаляются сразу, ник в результатах турниров заменяется на «Игрок удалён». Это же означает отзыв согласия.</p>
+<p>Запросы можно также отправить на почту или в Telegram из раздела 1. Ответим в течение 10 рабочих дней.</p>
+
+<h2>6. Как мы защищаем данные</h2>
+<ul>
+<li>соединение с Сайтом только по HTTPS;</li>
+<li>пароли хранятся только в виде хешей (bcrypt с солью);</li>
+<li>доступ к базе закрыт: данные доступны только через проверяемые запросы, игроки не видят служебные разделы;</li>
+<li>после пяти неверных попыток входа адрес блокируется на 10 минут.</li>
+</ul>
+
+<h2>7. Возраст</h2>
+<p>Сайт и клуб предназначены только для лиц старше 18 лет. Если мы узнаем, что аккаунт создал несовершеннолетний, аккаунт будет удалён.</p>
+
+<h2>8. Изменения политики</h2>
+<p>Новая редакция действует с момента публикации на этой странице. Дата редакции указана в начале документа.</p>
+
+<p style="margin-top:30px"><a href="consent.html">Согласие на обработку персональных данных</a> · <a href="./">На главную</a></p>
+</div>
+<script src="js/config.js"></script>
+<script>
+(function(){
+  var C=(window.BLIND_CONFIG||{}).OPERATOR||{};
+  var fallback={address:'Алтайский край, г. Барнаул, ул. Профинтерна, 36А',telegram:'@Poker_Brn'};
+  document.querySelectorAll('[data-op]').forEach(function(el){
+    var k=el.getAttribute('data-op'),v=String(C[k]||fallback[k]||'').trim();
+    if(v)el.textContent=v;else{el.textContent='[не указано]';el.className='miss'}
+  });
+  var site=location.origin+location.pathname.replace(/[^\/]*$/,'');
+  document.querySelectorAll('[data-site]').forEach(function(el){el.textContent=site});
+})();
+</script>
+</body>
+</html>

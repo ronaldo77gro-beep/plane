@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0c2a20">
+<title>Согласие на обработку персональных данных · БЛАИНД</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'">
+<style>
+:root{color-scheme:dark;--felt:#0c2a20;--lift:#123828;--gold:#c9a45c;--gold2:#e6cf9a;--ivory:#efe9da;--muted:#9fb0a3;--bad:#ef6b5e;--display:"Cormorant Garamond","Times New Roman",Georgia,serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--felt);color:var(--ivory);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:16px 16px 60px}
+.brand{font-family:var(--display);font-size:26px;font-weight:600;letter-spacing:.12em;color:var(--gold2);text-decoration:none}
+.brand i{font-style:normal;color:var(--gold);margin-right:6px}
+h1{font-family:var(--display);color:var(--gold2);font-weight:600;font-size:clamp(26px,5.5vw,38px);line-height:1.15;margin:22px 0 6px}
+h2{font-size:15px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);margin:28px 0 8px}
+a{color:var(--gold2)}
+.muted{color:var(--muted)}
+.miss{color:var(--bad);font-weight:600}
+ol,ul{padding-left:22px}li{margin:4px 0}
+.part{background:var(--lift);border:1px solid rgba(201,164,92,.25);border-radius:14px;padding:6px 18px 12px;margin:18px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<a class="brand" href="./"><i>♠</i>БЛАИНД</a>
+<h1>Согласие на обработку персональных данных</h1>
+<p class="muted">Согласие даётся при регистрации на сайте <span data-site></span> отметкой в соответствующих полях. Ниже — два отдельных согласия.</p>
+
+<div class="part" id="processing">
+<h2>Согласие 1. На обработку персональных данных</h2>
+<p>Я, регистрируясь на сайте клуба спортивного покера «БЛАИНД», свободно, своей волей и в своём интересе даю согласие оператору — <span data-op="name"></span> (ИНН <span data-op="inn"></span>, ОГРНИП <span data-op="ogrnip"></span>, адрес: <span data-op="address"></span>) — на обработку моих персональных данных на следующих условиях.</p>
+<ol>
+<li><b>Данные:</b> ник; хеш пароля; подтверждение, что мне исполнилось 18 лет; дата и время согласия; записи на турниры; результаты турниров (место, очки, нокауты); IP-адрес.</li>
+<li><b>Цели:</b> регистрация и вход на сайт, запись на турниры клуба, ведение рейтинга сезона и истории турниров, защита сайта от подбора паролей и массовых регистраций.</li>
+<li><b>Действия:</b> сбор, запись, систематизация, накопление, хранение, уточнение, извлечение, использование, передача (предоставление) сервисам хранения данных Supabase и GitHub Pages, в том числе трансграничная, обезличивание, блокирование, удаление, уничтожение. Обработка автоматизированная.</li>
+<li><b>Срок:</b> до удаления аккаунта или отзыва согласия. IP-адрес хранится не дольше 2 часов.</li>
+<li><b>Отзыв:</b> согласие можно отозвать в любой момент: «Профиль» → «Удалить аккаунт» на сайте, либо обращением на почту <span data-op="email"></span> или в Telegram <span data-op="telegram"></span>.</li>
+</ol>
+</div>
+
+<div class="part" id="distribution">
+<h2>Согласие 2. На распространение персональных данных</h2>
+<p>Я даю согласие оператору — <span data-op="name"></span> (ИНН <span data-op="inn"></span>) — на распространение моих персональных данных, то есть на публикацию в открытом доступе, на следующих условиях (ст. 10.1 Федерального закона № 152-ФЗ).</p>
+<ol>
+<li><b>Какие данные публикуются:</b> ник; места, очки и нокауты в турнирах; количество сыгранных турниров и побед; место в рейтинге сезона.</li>
+<li><b>Где:</b> в рейтинге сезона и в результатах турниров на сайте <span data-site></span>, а также на экранах в помещении клуба во время турнира.</li>
+<li><b>Цель:</b> ведение открытого рейтинга игроков клуба.</li>
+<li><b>Условия и запреты:</b> запретов и условий на обработку этих данных неограниченным кругом лиц не устанавливаю. Если захочу их установить — сообщу оператору, и они будут соблюдаться с момента получения обращения.</li>
+<li><b>Срок:</b> до удаления аккаунта или отзыва согласия. После отзыва ник в опубликованных результатах заменяется на «Игрок удалён».</li>
+<li><b>Отзыв:</b> так же, как согласия 1: «Удалить аккаунт» на сайте или обращение к оператору.</li>
+</ol>
+</div>
+
+<p class="muted">Подробнее — в <a href="privacy.html">политике обработки персональных данных</a>.</p>
+<p><a href="./">На главную</a></p>
+</div>
+<script src="js/config.js"></script>
+<script>
+(function(){
+  var C=(window.BLIND_CONFIG||{}).OPERATOR||{};
+  var fallback={address:'Алтайский край, г. Барнаул, ул. Профинтерна, 36А',telegram:'@Poker_Brn'};
+  document.querySelectorAll('[data-op]').forEach(function(el){
+    var k=el.getAttribute('data-op'),v=String(C[k]||fallback[k]||'').trim();
+    if(v)el.textContent=v;else{el.textContent='[не указано]';el.className='miss'}
+  });
+  var site=location.origin+location.pathname.replace(/[^\/]*$/,'');
+  document.querySelectorAll('[data-site]').forEach(function(el){el.textContent=site});
+})();
+</script>
+</body>
+</html>
