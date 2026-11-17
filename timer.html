@@ -6,7 +6,7 @@
 <title>БЛАЙНД · Таймер турнира</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script src="js/config.js"></script>
 <style>
   :root{
@@ -154,7 +154,7 @@
   <div class="t-name" style="font-size:18px; color:var(--cream);"></div>
   <p>Открой эту страницу на телевизорах и на телефоне. Выбери роль устройства — экраны синхронизируются автоматически.</p>
   <p id="remoteDenied" class="hidden" style="color:var(--red-bright); font-size:13px; max-width:360px;">Пульт доступен только крупье и администраторам. <a href="index.html#/login" style="color:var(--gold-bright)">Войдите на сайте</a> и откройте таймер снова.</p>
-  <p id="configWarning" class="hidden" style="color:var(--red-bright); font-size:12px; max-width:340px;">⚠ Не заполнены SUPABASE_URL / SUPABASE_ANON_KEY в начале файла — синхронизация между устройствами работать не будет.</p>
+  <p id="configWarning" class="hidden" style="color:var(--red-bright); font-size:12px; max-width:340px;">⚠ Не заполнены SUPABASE_URL / SUPABASE_ANON_KEY в файле js/config.js — синхронизация между устройствами работать не будет.</p>
   <div class="role-cards">
     <div class="role-card" data-role="tv">
       <div class="emoji">📺</div>
