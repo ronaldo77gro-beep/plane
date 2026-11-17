@@ -28,6 +28,7 @@ const routes = [
 ];
 
 let routeToken = 0;
+const STALE = Symbol('stale'); // страница сменилась, пока шла загрузка — прекращаем отрисовку
 export async function router() {
   const raw = location.hash.replace(/^#/, '') || '/';
   if (/access_token=|error_description=|type=recovery/.test(raw)) return; // обрабатывает supabase-js
@@ -53,8 +54,9 @@ export async function router() {
     }
     const token = ++routeToken;
     try {
-      await fn({ args: m.slice(1), params, render: (html) => { if (token === routeToken) render(html); }, isCurrent: () => token === routeToken });
+      await fn({ args: m.slice(1), params, render: (html) => { if (token !== routeToken) throw STALE; render(html); }, isCurrent: () => token === routeToken });
     } catch (e) {
+      if (e === STALE) return;
       console.error(e);
       if (token === routeToken) render(`<div class="card auth-card"><h2>Ошибка</h2><p class="muted">${esc(humanError(e))}</p><button class="btn" style="margin-top:14px" onclick="location.reload()">Обновить</button></div>`);
     }
