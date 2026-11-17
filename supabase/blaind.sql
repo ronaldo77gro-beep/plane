@@ -63,6 +63,8 @@ create table if not exists public.bl_users (
   created_at  bigint not null
 );
 
+alter table public.bl_users add column if not exists consent_at bigint;   -- когда дано согласие на обработку ПД
+
 create table if not exists public.bl_events (
   id     text primary key,
   title  text not null,
@@ -157,8 +159,8 @@ create or replace function public.bl_fail(k text) returns void
 language plpgsql as $$
 declare cnt int;
 begin
-  insert into public.bl_limits(key, n) values (k, 1)
-  on conflict (key) do update set n = public.bl_limits.n + 1
+  insert into public.bl_limits(key, n, since) values (k, 1, public.bl_now())
+  on conflict (key) do update set n = public.bl_limits.n + 1, since = public.bl_now()
   returning n into cnt;
   if cnt >= 5 then update public.bl_limits set n = 0, until = public.bl_now() + 600000 where key = k; end if;
 end $$;
@@ -229,6 +231,31 @@ language sql stable as $$
     from agg
 $$;
 
+-- Удалить ник из результатов (по запросу игрока или при удалении аккаунта):
+-- в итогах турниров и архиве сезонов ник заменяется на «Игрок удалён», ручные очки удаляются.
+create or replace function public.bl_anon_rows(r jsonb, k text) returns jsonb
+language sql immutable as $$
+  select coalesce(jsonb_agg(case when public.bl_key(x->>'name') = k then jsonb_set(x, '{name}', '"Игрок удалён"') else x end order by o), '[]'::jsonb)
+    from jsonb_array_elements(coalesce(r, '[]'::jsonb)) with ordinality t(x, o)
+$$;
+create or replace function public.bl_anonymize(k text) returns int
+language plpgsql as $$
+declare n int := 0;
+begin
+  if coalesce(k, '') = '' then return 0; end if;
+  update public.bl_archive set rows = public.bl_anon_rows(rows, k)
+   where exists (select 1 from jsonb_array_elements(rows) x where public.bl_key(x->>'name') = k);
+  get diagnostics n = row_count;
+  delete from public.bl_adjust where public.bl_key(name) = k;
+  update public.bl_seasons set data = jsonb_build_object(
+      'archive', (select coalesce(jsonb_agg(jsonb_set(a, '{rows}', public.bl_anon_rows(a->'rows', k)) order by o), '[]'::jsonb)
+                    from jsonb_array_elements(coalesce(data->'archive', '[]'::jsonb)) with ordinality t(a, o)),
+      'adjust',  (select coalesce(jsonb_agg(j order by o), '[]'::jsonb)
+                    from jsonb_array_elements(coalesce(data->'adjust', '[]'::jsonb)) with ordinality t(j, o)
+                   where public.bl_key(j->>'name') <> k));   -- архив сезонов небольшой, обновляем целиком
+  return n;
+end $$;
+
 create or replace function public.bl_valid_state(s jsonb) returns boolean
 language sql immutable as $$
   select s is not null and jsonb_typeof(s) = 'object'
@@ -278,9 +305,9 @@ begin
   if ps.token_hash is not null then select * into me from public.bl_users where id = ps.user_id; end if;
 
   -- уборка просроченного
+  delete from public.bl_limits where until < t - 3600000 and since < t - 3600000;   -- IP-адреса не храним дольше нужного
   if random() < 0.02 then
     delete from public.bl_sessions where expires_at < now();
-    delete from public.bl_limits where until < t - 3600000 and since < t - 3600000;
     delete from public.bl_reqs where at < t - 86400000;
   end if;
 
@@ -329,7 +356,7 @@ begin
         'events', (select coalesce(jsonb_agg(jsonb_build_object('id', ev.id, 'title', ev.title, 'at', ev.at, 'cap', ev.cap,
                      'names', (select coalesce(jsonb_agg(us.nick order by s.at), '[]'::jsonb) from public.bl_signups s join public.bl_users us on us.id = s.user_id where s.event_id = ev.id))
                      order by public.bl_ev_ms(ev.at)), '[]'::jsonb) from public.bl_events ev),
-        'users', (select coalesce(jsonb_agg(jsonb_build_object('id', id, 'nick', nick, 'createdAt', created_at) order by nick_key), '[]'::jsonb) from public.bl_users),
+        'users', (select coalesce(jsonb_agg(jsonb_build_object('id', id, 'nick', nick, 'createdAt', created_at, 'consentAt', consent_at) order by nick_key), '[]'::jsonb) from public.bl_users),
         'archive', (select coalesce(jsonb_agg(jsonb_build_object('id', id, 'name', name, 'date', date, 'count', jsonb_array_length(rows)) order by date desc), '[]'::jsonb) from public.bl_archive),
         'adjust', (select coalesce(jsonb_agg(jsonb_build_object('id', id, 'name', name, 'pts', pts, 'note', note, 'date', date) order by date desc), '[]'::jsonb) from public.bl_adjust),
         'rating', public.bl_rating()));
@@ -392,10 +419,11 @@ begin
     v_pw := b->>'password';
     if jsonb_typeof(b->'password') <> 'string' or length(v_pw) < 8 or length(v_pw) > 100 then return '{"status":400,"body":{"msg":"Пароль: от 8 знаков."}}'; end if;
     if b->'adult' is distinct from 'true'::jsonb then return '{"status":400,"body":{"msg":"Регистрация только для тех, кому есть 18 лет."}}'; end if;
+    if b->'consent' is distinct from 'true'::jsonb then return '{"status":400,"body":{"msg":"Нужно согласие на обработку персональных данных."}}'; end if;
     if exists (select 1 from public.bl_users where nick_key = public.bl_key(v_nick)) then return '{"status":409,"body":{"msg":"Этот ник уже занят."}}'; end if;
     if (select count(*) from public.bl_users) >= 5000 then return '{"status":503,"body":{"msg":"Регистрация временно закрыта."}}'; end if;
     v_id := public.bl_rand_hex(8);
-    insert into public.bl_users(id, nick, nick_key, hash, created_at) values (v_id, v_nick, public.bl_key(v_nick), public.bl_hash_pw(v_pw), t);
+    insert into public.bl_users(id, nick, nick_key, hash, created_at, consent_at) values (v_id, v_nick, public.bl_key(v_nick), public.bl_hash_pw(v_pw), t, t);
     return jsonb_build_object('status', 200, 'body', jsonb_build_object('ok', true, 'token', public.bl_new_session('player', v_id, 90)));
   end if;
 
@@ -418,6 +446,7 @@ begin
   if p_path = 'api/p/signup' or p_path = 'api/p/delete' then
     if me.id is null then return '{"status":401,"body":{"msg":"Войдите в аккаунт."}}'; end if;
     if p_path = 'api/p/delete' then
+      perform public.bl_anonymize(me.nick_key);           -- отзыв согласия: ник убирается и из результатов
       delete from public.bl_users where id = me.id;
       delete from public.bl_sessions where kind = 'player' and user_id = me.id;
       return '{"status":200,"body":{"ok":true}}';
@@ -524,6 +553,13 @@ begin
     end if;
     delete from public.bl_archive; delete from public.bl_adjust;
     return '{"status":200,"body":{"ok":true}}';
+  end if;
+
+  if p_path = 'api/admin/anonymize' then
+    v_k := public.bl_key(b->>'name');
+    if v_k = '' then return '{"status":400,"body":{"msg":"Укажите ник."}}'; end if;
+    v_n := public.bl_anonymize(v_k);
+    return jsonb_build_object('status', 200, 'body', jsonb_build_object('ok', true, 'count', v_n));
   end if;
 
   if p_path = 'api/admin/user/reset' then
