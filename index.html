@@ -278,7 +278,7 @@ let S=defState();
 let offset=0;                       // server time minus local time
 const now=()=>Date.now()+offset;
 let tab='clock', addName='', filter='', tvMode=location.hash==='#tv', dealerMode=location.hash==='#dealer', dTable=+ls.get('blaind.dtable')||0, reqs=[], seenReq=new Set(), dlOk=false, dealerCode='', staffMode=location.hash==='#staff', pub=null, pTab='events', pReg=false, pErr='', PA=null;
-let setupNeeded=false, srv=false, online=false, authed=false, tvOk=false, tvCode='', dirty=false, loginErr='', sound=false, lastLvl=-1, lastWarn=-1;
+let dbErr='', setupNeeded=false, srv=false, online=false, authed=false, tvOk=false, tvCode='', dirty=false, loginErr='', sound=false, lastLvl=-1, lastWarn=-1;
 
 /* ================= clock ================= */
 function resolveClock(st,t){
@@ -390,7 +390,7 @@ function processReqs(){
 }
 function setReqs(list){reqs=Array.isArray(list)?list:[];processReqs();render()}
 async function sendReq(r){
-  if((!srv||authed)&&r.type!=='floor'){applyReq(r);toast('Отмечено: '+reqText(r));return}
+  if((LOCAL()||authed)&&r.type!=='floor'){applyReq(r);toast('Отмечено: '+reqText(r));return}
   if(!srv){toast('В локальном режиме флор — это вы');return}
   try{const x=await api('api/req',{method:'POST',body:r});if(!x.ok)throw 0;toast(r.type==='floor'?'Флор вызван':'Отправлено: '+reqText(r))}catch(e){toast('Нет связи. Позовите флора голосом.')}
 }
@@ -409,7 +409,7 @@ async function loadPA(){try{const r=await api('api/admin/portal');if(r.ok){PA=aw
 async function pPost(path,body,okMsg){try{const r=await api(path,{method:'POST',body:body||{}});const j=await r.json().catch(()=>({}));if(!r.ok){toast(j.msg||'Не получилось');return null}if(okMsg)toast(okMsg);return j}catch(e){toast('Нет связи с базой');return null}}
 function viewPortal(){
   let h='<div class="wrap" style="max-width:720px"><header class="bar"><div class="brand"><i>♠</i>БЛАИНД</div><div class="tname">Клуб спортивного покера</div>'+(pub&&pub.me?'<span class="pill ok">'+esc(pub.me.nick)+'</span>':'')+'</header>';
-  if(!pub)return h+'<div class="card muted">'+(online?'Загрузка…':'Нет связи. Пробую подключиться…')+'</div></div>';
+  if(!pub)return h+'<div class="card muted">'+(online?'Загрузка…':dbErr==='nofunc'?'Сайт ещё настраивается. Загляните чуть позже.':'Нет связи. Пробую подключиться…')+'</div></div>';
   const L=pub.live;
   if(L){const r=resolveClock({levels:L.levels,clock:L.clock},now()),l=L.levels[r.i];
     h+='<div class="card clock dl"><div class="lvl">Сейчас идёт · '+esc(L.name)+'</div><div class="tm num'+(r.running?'':' paused')+'" id="ptm">'+mmss(r.left)+'</div><div class="bl num">'+(l.brk?'Перерыв':lvlText(l))+'</div><div class="muted small num" style="margin-top:6px">В игре '+L.left+' из '+L.entries+'</div>'+
@@ -473,13 +473,17 @@ function adopt(remote,t){if(typeof t==='number')offset=t-Date.now();if(valid(rem
    Токены сессий: sid — администратор, tv — экран, dl — крупье, pu — игрок. */
 const CFG=window.BLIND_CONFIG||{};
 const HAS_DB=!!(CFG.SUPABASE_URL&&/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)[:/])/.test(CFG.SUPABASE_URL+'/')&&CFG.SUPABASE_ANON_KEY);
+// Локальный режим (пульт без входа) — только если база не подключена вовсе. Если база подключена,
+// но недоступна или не настроена, посетители пульт не видят.
+const LOCAL=()=>!srv&&!HAS_DB;
 const TOK={get(k){return ls.get('blaind.tok.'+k)},set(k,v){if(v)ls.set('blaind.tok.'+k,v);else ls.del('blaind.tok.'+k)}};
 async function api(path,opt){opt=opt||{};if(!HAS_DB)throw new Error('no db');const c=new AbortController();const to=setTimeout(()=>c.abort(),8000);
   try{
     const r=await fetch(CFG.SUPABASE_URL.replace(/\/+$/,'')+'/rest/v1/rpc/bl_api',{method:'POST',cache:'no-store',signal:c.signal,
       headers:{'Content-Type':'application/json','apikey':CFG.SUPABASE_ANON_KEY},
       body:JSON.stringify({p_method:opt.method||'GET',p_path:path,p_body:opt.body||{},p_tokens:{sid:TOK.get('sid'),tv:TOK.get('tv'),dl:TOK.get('dl'),pu:TOK.get('pu')}})});
-    if(!r.ok)throw new Error('db '+r.status);
+    if(!r.ok){let t='';try{t=await r.text()}catch(x){}const e=new Error('db '+r.status+' '+t.slice(0,200));
+      e.db=/PGRST202|bl_api|does not exist/.test(t)?'nofunc':(r.status===401||r.status===403)?'key':'net';throw e}
     const j=await r.json(),body=(j&&j.body)||{},status=(j&&j.status)||500;
     return{ok:status>=200&&status<300,status,body,json:async()=>body};
   }finally{clearTimeout(to)}}
@@ -516,7 +520,7 @@ async function connect(){
   if(!HAS_DB)return;
   try{
     const r=await api('api/me');const j=await r.json();if(j.app!=='blaind')throw 0;
-    srv=true;ls.set('blaind.srv','1');offset=j.now-Date.now();authed=!!j.auth;tvOk=!!j.tv;tvCode=j.tvCode||'';dlOk=!!j.dealer;dealerCode=j.dealerCode||'';setupNeeded=!!j.setup;
+    srv=true;dbErr='';ls.set('blaind.srv','1');offset=j.now-Date.now();authed=!!j.auth;tvOk=!!j.tv;tvCode=j.tvCode||'';dlOk=!!j.dealer;dealerCode=j.dealerCode||'';setupNeeded=!!j.setup;
     if(authed)ls.set('blaind.admin','1');else{ls.del('blaind.admin');TOK.set('sid',null)}
     if(!tvOk)TOK.set('tv',null);if(!dlOk)TOK.set('dl',null);
     if(authed||tvOk||dlOk){
@@ -527,7 +531,8 @@ async function connect(){
     if(authed&&tab==='club')loadPA();
     render();
   }catch(e){
-    if(!srv&&ls.get('blaind.srv')==='1'&&location.hostname){srv=true;authed=ls.get('blaind.admin')==='1'}
+    dbErr=(e&&e.db)||'net';
+    if(!srv&&ls.get('blaind.srv')==='1'&&location.hostname&&dbErr==='net'){srv=true;authed=ls.get('blaind.admin')==='1'}
     setOnline(false);render();
   }
 }
@@ -582,7 +587,13 @@ let modalYes=null;
 function modal(html,yes){modalYes=yes||null;$('#modal').innerHTML='<div class="box" role="dialog" aria-modal="true">'+html+'</div>';$('#modal').classList.add('on')}
 function closeModal(){$('#modal').classList.remove('on');$('#modal').innerHTML='';modalYes=null}
 function ask(text,label,yes){modal('<p style="margin-top:0">'+esc(text)+'</p><div class="row" style="justify-content:flex-end"><button class="btn" data-a="mclose">Отмена</button><button class="btn gold" data-a="myes">'+esc(label)+'</button></div>',yes)}
+function dbHint(){
+  if(dbErr==='nofunc')return 'База Supabase не настроена: выполните файл supabase/blaind.sql в Supabase → SQL Editor (целиком, кнопка Run) и обновите страницу.';
+  if(dbErr==='key')return 'Supabase не принимает ключ: проверьте SUPABASE_URL и ключ в js/config.js (Project Settings → API).';
+  return 'Нет связи с базой. Проверьте интернет. Изменения сохраняются на этом устройстве и уйдут в базу, когда связь вернётся.';
+}
 function statusPill(){
+  if(!srv&&HAS_DB&&dbErr)return '<span id="pill" class="pill bad" title="'+esc(dbHint())+'">'+(dbErr==='nofunc'?'База не настроена':dbErr==='key'?'Неверный ключ базы':'Нет связи с базой')+'</span>';
   if(!srv)return '<span id="pill" class="pill ok" title="Данные хранятся в этом браузере">Локальный режим</span>';
   if(!online)return '<span id="pill" class="pill warn" title="Все изменения сохраняются на этом устройстве и уйдут в базу, когда связь вернётся">Нет связи · работаем локально</span>';
   if(dirty)return '<span id="pill" class="pill warn">Отправка…</span>';
@@ -689,7 +700,7 @@ function viewDealers(){
 }
 function viewDealer(){
   const r=resolveClock(S,now()),T=totals(),tbs=activeTables();
-  let h='<div class="wrap"><header class="bar"><div class="brand"><i>♠</i>БЛАИНД</div><div class="tname">Крупье'+(dTable?' · стол '+dTable:'')+'</div>'+(srv?statusPill():'')+((!srv||authed)?'<a class="btn sm" href="#">Управление</a>':'')+'</header>';
+  let h='<div class="wrap"><header class="bar"><div class="brand"><i>♠</i>БЛАИНД</div><div class="tname">Крупье'+(dTable?' · стол '+dTable:'')+'</div>'+(srv?statusPill():'')+((LOCAL()||authed)?'<a class="btn sm" href="#">Управление</a>':'')+'</header>';
   h+='<div class="row" style="margin-bottom:12px">'+tbs.map(t=>'<button class="btn sm'+(t===dTable?' gold':'')+'" data-a="dtable" data-id="'+t+'">Стол '+t+'</button>').join('')+'</div>';
   h+='<div class="card clock dl" id="clk">'+clockBlock(r,false)+'<div class="muted small num" style="margin-top:8px">В игре '+T.left+' из '+T.entries+' · средний стек '+fmtK(T.avg)+'</div></div>';
   if(!dTable||!tbs.includes(dTable))return h+'<div class="card muted">Выберите свой стол.</div></div>';
@@ -774,7 +785,7 @@ function viewTV(){
   }
   const foot='<footer class="tv-foot"><span>ул. Профинтерна, 36А</span><i class="dot"></i><span>Запись на турниры <span class="tg">@Poker_Brn</span></span><i class="dot"></i><span>18+ · легальный покер на турнирный рейтинг</span>'+(srv&&!online?'<i class="dot"></i><span class="off">Нет связи · часы идут</span>':'')+'</footer>';
   return '<div class="tv">'+(winner?'<div class="tvconf">'+CONF+'</div>':'')+'<div class="tvs"><i class="orn a"></i><i class="orn b"></i><i class="orn c"></i><i class="orn d"></i>'+top+main+foot+'</div>'+
-    '<div class="corner">'+(sound?'<button class="btn sm" data-a="soundtest">🔔 Проверить звук</button>':'<button class="btn sm" data-a="sound">🔊 Звук</button>')+'<button class="btn sm" data-a="full">⛶ Экран</button>'+((!srv||authed)?'<a class="btn sm" href="#">Управление</a>':'')+'</div>'+
+    '<div class="corner">'+(sound?'<button class="btn sm" data-a="soundtest">🔔 Проверить звук</button>':'<button class="btn sm" data-a="sound">🔊 Звук</button>')+'<button class="btn sm" data-a="full">⛶ Экран</button>'+((LOCAL()||authed)?'<a class="btn sm" href="#">Управление</a>':'')+'</div>'+
     (!sound&&!soundSkipped?'<div class="tvsound"><button data-a="sound" id="tvsoundbtn"><b>♠ Включить звук</b><span>Нажмите OK на пульте: звук смены блайндов и полный экран</span></button><button class="skip" data-a="soundskip">Продолжить без звука</button></div>':'')+'</div>';
 }
 /* фон, курсор, «не засыпать» — живут вне #app, чтобы анимации не перезапускались при обновлении данных */
@@ -793,7 +804,7 @@ document.addEventListener('visibilitychange',()=>{if(tvMode&&!document.hidden)ke
 let annT=null;
 const bootAt=Date.now();
 function announce(i,fromBreak){
-  if(!tvMode||!(authed||tvOk||!srv)||Date.now()-bootAt<5000)return;   // при включении ТВ анонс не нужен
+  if(!tvMode||!(authed||tvOk||LOCAL())||Date.now()-bootAt<5000)return;   // при включении ТВ анонс не нужен
   const l=S.levels[i];if(!l)return;
   const old=document.getElementById('tvann');if(old)old.remove();clearTimeout(annT);
   const el=document.createElement('div');el.id='tvann';
@@ -826,11 +837,11 @@ const TABS=[['clock','Часы'],['players','Игроки'],['tables','Стол�
 function render(){
   const app=$('#app');const act=document.activeElement,keep=act&&act.id&&app.contains(act)?{id:act.id,s:act.selectionStart,e:act.selectionEnd}:null;
   const drafts=[];app.querySelectorAll('input[id],textarea[id]').forEach(el=>{const d=el.dataset;if(d.f||d.l||d.b||d.rot||d.chk||el.id==='addName'||el.id==='filter')return;drafts.push([el.id,el.type==='checkbox'?el.checked:el.value,el.type==='checkbox'])});
-  const isAdmin=!srv||authed;
+  const isAdmin=LOCAL()||authed;
   let h;
   if(dealerMode){h=(isAdmin||dlOk)?viewDealer():(online?viewDealerCode():viewDealer())}
   else if(tvMode){h=(isAdmin||tvOk)?viewTV():(online?viewTVCode():viewTV())}
-  else if(!isAdmin){h=staffMode?(online?(setupNeeded?viewSetup():viewLogin()):'<div class="center"><div class="card"><p>Нет связи. Пробую подключиться…</p></div></div>'):viewPortal()}
+  else if(!isAdmin){h=staffMode?(online?(setupNeeded?viewSetup():viewLogin()):'<div class="center"><div class="card"><p style="margin-top:0">'+esc(dbErr?dbHint():'Нет связи. Пробую подключиться…')+'</p><p class="small muted" style="margin-bottom:0">Страница сама подключится, когда база заработает.</p></div></div>'):viewPortal()}
   else{
     const body=reqBanner()+{clock:viewClock,players:viewPlayers,tables:viewTables,dealers:viewDealers,club:viewClub,structure:viewStructure,results:viewResults,settings:viewSettings}[tab]();
     h='<div class="wrap"><header class="bar"><div class="brand"><i>♠</i>БЛАИНД</div><div class="tname">'+esc(S.t.name)+'</div>'+statusPill()+'<a class="btn sm" href="#tv">Экран ТВ</a></header>'+
@@ -846,7 +857,7 @@ function tick(){
   if(lastLvl!==-1&&r.i!==lastLvl){const isB=!!S.levels[r.i].brk,wasB=!!(S.levels[lastLvl]&&S.levels[lastLvl].brk);chime(isB?'break':wasB?'resume':'level');announce(r.i,wasB)}
   if(r.running&&r.left<=60000&&r.left>58000&&lastWarn!==r.i){lastWarn=r.i;chime('warn');warnBanner(S.levels[r.i].brk?'Перерыв закончится через минуту':'Последняя минута уровня')}
   const changed=r.i!==lastLvl||(!!r.ended&&S.clock.running);lastLvl=r.i;
-  if(changed){if((!srv||authed)&&(r.i!==S.clock.i||r.ended)){fixClock();commit()}else render();return}
+  if(changed){if((LOCAL()||authed)&&(r.i!==S.clock.i||r.ended)){fixClock();commit()}else render();return}
   const ptm=$('#ptm');if(ptm&&pub&&pub.live){const q=resolveClock({levels:pub.live.levels,clock:pub.live.clock},now());ptm.textContent=mmss(q.left)}
   const tm=$('#tm');if(tm){if(tm.classList.contains('tv-digits')){const h=digitsHTML(r.left);if(tm._h!==h){tm.innerHTML=h;tm._h=h}}else tm.textContent=mmss(r.left);tm.classList.toggle('low',r.running&&r.left<=60000)}
   const pg=$('#tvprog');if(pg)pg.style.width=lvlPct(r)+'%';
