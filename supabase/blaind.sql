@@ -166,6 +166,22 @@ begin
 end $$;
 
 -- счётчик в окне: true, если лимит превышен
+-- общий счётчик неудач со всех адресов: защита от подбора с множества IP (ботнет).
+-- После max_n неудач за окно вход этим способом закрывается на lock_ms для всех новых устройств;
+-- уже вошедшие экраны продолжают работать.
+create or replace function public.bl_fail_global(k text, max_n int, window_ms bigint, lock_ms bigint) returns void
+language plpgsql as $$
+declare t bigint := public.bl_now(); r public.bl_limits;
+begin
+  select * into r from public.bl_limits where key = k for update;
+  if not found or r.since < t - window_ms then
+    insert into public.bl_limits(key, n, since, until) values (k, 1, t, 0)
+    on conflict (key) do update set n = 1, since = t, until = 0;
+  else
+    update public.bl_limits set n = n + 1, until = case when n + 1 >= max_n then t + lock_ms else until end where key = k;
+  end if;
+end $$;
+
 create or replace function public.bl_rate(k text, max_n int, window_ms bigint) returns boolean
 language plpgsql as $$
 declare t bigint := public.bl_now(); r public.bl_limits;
@@ -401,12 +417,13 @@ begin
 
   if p_path = 'api/tv' or p_path = 'api/dealer' then
     v_k := case when p_path = 'api/tv' then 't' else 'd' end;
-    if public.bl_blocked(v_k || ip) then return '{"status":429,"body":{"error":"wait"}}'; end if;
+    if public.bl_blocked(v_k || ip) or public.bl_blocked('G' || v_k) then return '{"status":429,"body":{"error":"wait"}}'; end if;
     if jsonb_typeof(b->'code') = 'string' and b->>'code' = (case when v_k = 't' then cfg.tv_code else cfg.dealer_code end) then
       return jsonb_build_object('status', 200, 'body', jsonb_build_object('ok', true,
         'token', public.bl_new_session(case when v_k = 't' then 'tv' else 'dealer' end, null, case when v_k = 't' then 365 else 30 end)));
     end if;
     perform public.bl_fail(v_k || ip);
+    perform public.bl_fail_global('G' || v_k, 30, 3600000, 3600000);   -- 30 неверных кодов в час со всех адресов → пауза на час
     return '{"status":401,"body":{"error":"bad"}}';
   end if;
 
@@ -414,6 +431,7 @@ begin
   if p_path = 'api/p/register' then
     if public.bl_rate('r' || ip, 5, 3600000) then return '{"status":429,"body":{"msg":"Слишком много регистраций с этого адреса. Попробуйте через час."}}'; end if;
     v_nick := regexp_replace(trim(coalesce(b->>'nick', '')), '\s+', ' ', 'g');
+    if coalesce(b->>'website', '') <> '' then return '{"status":400,"body":{"msg":"Не получилось зарегистрироваться."}}'; end if;   -- ловушка для ботов
     if v_nick !~ '^[A-Za-zА-Яа-яЁё0-9][A-Za-zА-Яа-яЁё0-9 _.-]{1,23}$' then
       return '{"status":400,"body":{"msg":"Ник: от 2 до 24 знаков, буквы, цифры, пробел, точка, дефис."}}'; end if;
     v_pw := b->>'password';
@@ -680,6 +698,30 @@ begin
 
   if n_users + n_events + n_signups + n_archive > 0 then
     raise notice 'Перенесено из прошлой версии: аккаунтов %, турниров в расписании %, записей %, турниров в рейтинг %', n_users, n_events, n_signups, n_archive;
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+--  ЗАКРЫТИЕ ПРОШЛОЙ ВЕРСИИ САЙТА
+--  Её таблицы остаются в базе как резервная копия, но снаружи (через API) больше не читаются
+--  и не меняются; её функции недоступны; регистрация через Supabase Auth не создаёт профилей.
+-- ---------------------------------------------------------------------
+do $$
+declare t text; f record;
+begin
+  foreach t in array array['profiles','profile_contacts','tournaments','registrations','timer_state','tournaments_view'] loop
+    if to_regclass('public.' || t) is not null then
+      execute format('revoke all on public.%I from anon, authenticated', t);
+    end if;
+  end loop;
+  for f in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public'
+              and p.proname in ('my_role','is_staff','is_admin','book_seat','cancel_booking','promote_waitlist',
+                                'finish_tournament','recalc_points','get_leaderboard','calc_points','handle_new_user','profiles_guard') loop
+    execute format('revoke all on function %s from public, anon, authenticated', f.sig);
+  end loop;
+  if to_regclass('auth.users') is not null then
+    execute 'drop trigger if exists on_auth_user_created on auth.users';
   end if;
 end $$;
 

@@ -235,6 +235,8 @@ body.tv-idle .tv .corner{opacity:0}
 <script src="js/config.js"></script>
 <script>
 'use strict';
+/* защита от встраивания сайта в чужую страницу (кликджекинг) */
+if(window.top!==window.self){document.documentElement.style.display='none';try{window.top.location=window.self.location.href}catch(e){}}
 /* ================= helpers ================= */
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -432,7 +434,7 @@ function viewPortal(){
       h+='<div class="card"><h3>'+(pReg?'Регистрация':'Вход')+'</h3><form data-form="'+(pReg?'preg':'plogin')+'" style="display:flex;flex-direction:column;gap:10px">'+
         '<input id="pnick" placeholder="Ник'+(pReg?' (так вас увидят в рейтинге)':'')+'" autocomplete="username" maxlength="24" aria-label="Ник">'+
         '<input id="ppass" type="password" placeholder="Пароль'+(pReg?', от 8 знаков':'')+'" autocomplete="'+(pReg?'new-password':'current-password')+'" aria-label="Пароль">'+
-        (pReg?'<label class="row small"><input type="checkbox" id="padult"> Мне исполнилось 18 лет</label>'+
+        (pReg?'<input id="pweb" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">'+'<label class="row small"><input type="checkbox" id="padult"> Мне исполнилось 18 лет</label>'+
           '<label class="row small" style="align-items:flex-start;flex-wrap:nowrap"><input type="checkbox" id="pconsent" style="margin-top:3px;flex:none"> <span>Даю <a href="consent.html#processing" target="_blank" rel="noopener" style="color:var(--gold2)">согласие на обработку персональных данных</a> и принимаю <a href="privacy.html" target="_blank" rel="noopener" style="color:var(--gold2)">политику</a></span></label>'+
           '<label class="row small" style="align-items:flex-start;flex-wrap:nowrap"><input type="checkbox" id="pdist" style="margin-top:3px;flex:none"> <span>Даю <a href="consent.html#distribution" target="_blank" rel="noopener" style="color:var(--gold2)">согласие на публикацию ника и результатов</a> в рейтинге клуба</span></label>':'')+
         '<button class="btn gold" type="submit">'+(pReg?'Зарегистрироваться':'Войти')+'</button>'+(pErr?'<div class="small" style="color:var(--bad)">'+esc(pErr)+'</div>':'')+'</form>'+
@@ -955,7 +957,7 @@ document.addEventListener('submit',async e=>{
   if(k==='tv'){loginErr='';const code=$('#code').value.trim();try{const r=await api('api/tv',{method:'POST',body:{code}});if(r.ok){TOK.set('tv',r.body.token);await connect()}else{loginErr=r.status===429?'Слишком много попыток. Подождите 10 минут.':'Неверный код';render()}}catch(x){loginErr='Нет связи с базой';render()}}
   if(k==='adddealer'){const n=$('#dname').value.trim();if(n){S.dealers.push({id:'d'+uid(),name:n});$('#dname').value='';commit()}}
   if(k==='dealer'){loginErr='';try{const r=await api('api/dealer',{method:'POST',body:{code:$('#dcode').value.trim()}});if(r.ok){TOK.set('dl',r.body.token);await connect()}else{loginErr=r.status===429?'Слишком много попыток. Подождите 10 минут.':'Неверный код';render()}}catch(x){loginErr='Нет связи с базой';render()}}
-  if(k==='plogin'||k==='preg'){pErr='';const body={nick:$('#pnick').value,password:$('#ppass').value,adult:!!($('#padult')&&$('#padult').checked),consent:!!($('#pconsent')&&$('#pconsent').checked&&$('#pdist')&&$('#pdist').checked)};
+  if(k==='plogin'||k==='preg'){pErr='';const body={website:($('#pweb')&&$('#pweb').value)||'',nick:$('#pnick').value,password:$('#ppass').value,adult:!!($('#padult')&&$('#padult').checked),consent:!!($('#pconsent')&&$('#pconsent').checked&&$('#pdist')&&$('#pdist').checked)};
     if(k==='preg'&&!body.consent){pErr='Для регистрации нужны оба согласия: на обработку и на публикацию ника в рейтинге.';render();return}
     try{const r=await api(k==='preg'?'api/p/register':'api/p/login',{method:'POST',body});const j=await r.json().catch(()=>({}));if(r.ok){TOK.set('pu',j.token);$('#pnick').value='';$('#ppass').value='';pTab='events';await loadPub();toast(k==='preg'?'Аккаунт создан':'Вы вошли')}else{pErr=j.msg||'Не получилось';render()}}catch(x){pErr='Нет связи с базой';render()}}
   if(k==='evadd'){const j=await pPost('api/admin/event',{title:$('#evt').value.trim(),at:$('#eva').value,cap:+$('#evc').value|0},'Турнир добавлен в расписание');if(j){['#evt','#eva','#evc'].forEach(q=>{$(q).value=''});loadPA()}}
