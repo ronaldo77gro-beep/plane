@@ -616,6 +616,73 @@ select 1, null, upper(public.bl_rand_hex(5)), public.bl_code6(), public.bl_code6
  where not exists (select 1 from public.bl_config);
 insert into public.bl_state(id, state, updated_at) values (1, null, 0) on conflict (id) do nothing;
 
+-- ---------------------------------------------------------------------
+--  ПЕРЕНОС ДАННЫХ ПРОШЛОЙ ВЕРСИИ САЙТА (таблицы profiles / tournaments / registrations)
+--  Аккаунты переносятся вместе с паролями: Supabase хранит их в bcrypt, как и этот сайт,
+--  поэтому игроки входят по нику со своим прежним паролем. Старые таблицы не изменяются.
+--  Повторный запуск ничего не дублирует.
+-- ---------------------------------------------------------------------
+do $$
+declare n_users int := 0; n_events int := 0; n_signups int := 0; n_archive int := 0;
+begin
+  if to_regclass('public.profiles') is null or to_regclass('auth.users') is null
+     or not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'nickname') then
+    return;
+  end if;
+
+  -- аккаунты: ник из профиля, пароль — прежний bcrypt-хеш
+  execute $q$
+    insert into public.bl_users(id, nick, nick_key, hash, created_at)
+    select p.id::text, left(regexp_replace(trim(p.nickname), '\s+', ' ', 'g'), 24), public.bl_key(left(regexp_replace(trim(p.nickname), '\s+', ' ', 'g'), 24)),
+           u.encrypted_password, floor(extract(epoch from coalesce(p.created_at, now())) * 1000)::bigint
+      from public.profiles p join auth.users u on u.id = p.id
+     where coalesce(u.encrypted_password, '') like '$2%' and coalesce(trim(p.nickname), '') <> ''
+     order by p.created_at
+    on conflict do nothing $q$;
+  get diagnostics n_users = row_count;
+
+  if to_regclass('public.tournaments') is not null and to_regclass('public.registrations') is not null
+     and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'tournaments' and column_name = 'max_players') then
+    -- предстоящие турниры → расписание (время Барнаула)
+    execute $q$
+      insert into public.bl_events(id, title, at, cap)
+      select t.id::text, left(t.title, 80), to_char(t.starts_at at time zone 'UTC' + interval '7 hours', 'YYYY-MM-DD"T"HH24:MI'), least(greatest(t.max_players, 0), 500)
+        from public.tournaments t
+       where t.status in ('scheduled', 'running') and t.starts_at > now() - interval '6 hours'
+      on conflict do nothing $q$;
+    get diagnostics n_events = row_count;
+
+    -- записи на эти турниры
+    execute $q$
+      insert into public.bl_signups(event_id, user_id, at)
+      select r.tournament_id::text, r.user_id::text, floor(extract(epoch from r.created_at) * 1000)::bigint
+        from public.registrations r
+       where r.user_id is not null and r.status <> 'waitlist'
+         and exists (select 1 from public.bl_events e where e.id = r.tournament_id::text)
+         and exists (select 1 from public.bl_users u where u.id = r.user_id::text)
+      on conflict do nothing $q$;
+    get diagnostics n_signups = row_count;
+
+    -- сыгранные рейтинговые турниры с местами → рейтинг сезона
+    execute $q$
+      insert into public.bl_archive(id, name, date, rows)
+      select t.id::text, left(t.title, 80), floor(extract(epoch from t.starts_at) * 1000)::bigint,
+             jsonb_agg(jsonb_build_object('name', coalesce(p.nickname, r.guest_name), 'place', r.place,
+                                          'pts', round(r.points)::int, 'ko', r.knockouts) order by r.place)
+        from public.tournaments t
+        join public.registrations r on r.tournament_id = t.id and r.place is not null
+        left join public.profiles p on p.id = r.user_id
+       where t.status = 'finished' and t.is_rating
+         and not exists (select 1 from public.bl_archive a where a.id = t.id::text)
+       group by t.id, t.title, t.starts_at $q$;
+    get diagnostics n_archive = row_count;
+  end if;
+
+  if n_users + n_events + n_signups + n_archive > 0 then
+    raise notice 'Перенесено из прошлой версии: аккаунтов %, турниров в расписании %, записей %, турниров в рейтинг %', n_users, n_events, n_signups, n_archive;
+  end if;
+end $$;
+
 -- Результат: код первичной настройки (или сообщение, что пароль уже задан)
 select case when admin_hash is null
             then 'КОД ПЕРВИЧНОЙ НАСТРОЙКИ: ' || setup_code || '  — откройте сайт/#staff и задайте пароль администратора'
